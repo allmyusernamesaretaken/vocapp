@@ -14,13 +14,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-stone-100 dark:bg-stone-950">
-      <main>
+      <main className="safe-top">
         {tab === TAB_ADD && <AddWord />}
         {tab === TAB_LIST && <WordList />}
         {tab === TAB_SETTINGS && <SettingsScreen />}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-stone-200/80 bg-white/95 shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.08)] backdrop-blur-sm dark:border-stone-800 dark:bg-stone-900/95 dark:shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.3)] safe-bottom">
+      <nav
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-stone-200/80 bg-white/95 shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.08)] backdrop-blur-sm dark:border-stone-800 dark:bg-stone-900/95 dark:shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.3)]"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
         <div className="flex justify-around px-2">
           <TabButton
             active={tab === TAB_ADD}

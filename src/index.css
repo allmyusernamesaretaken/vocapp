@@ -23,7 +23,10 @@ body {
     radial-gradient(ellipse 60% 40% at 0% 100%, rgba(120, 113, 108, 0.03), transparent);
 }
 
-/* Safe area for iPhone notch/home indicator */
+/* Safe area for iPhone notch / home indicator */
+.safe-top {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+}
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
