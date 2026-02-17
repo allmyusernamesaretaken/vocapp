@@ -23,6 +23,10 @@ export function ScanWordModal({ open, onClose, onWordExtracted }) {
     setCroppedAreaPixels(croppedAreaPx)
   }, [])
 
+  const onCropAreaChange = useCallback((_croppedArea, croppedAreaPx) => {
+    setCroppedAreaPixels(croppedAreaPx)
+  }, [])
+
   const handleFileChange = (e) => {
     const file = e.target?.files?.[0]
     if (!file || !file.type.startsWith('image/')) return
@@ -120,6 +124,7 @@ export function ScanWordModal({ open, onClose, onWordExtracted }) {
                 aspect={undefined}
                 onCropChange={setCrop}
                 onCropComplete={onCropComplete}
+                onCropAreaChange={onCropAreaChange}
                 objectFit="contain"
                 style={{ containerStyle: { backgroundColor: '#1c1917' } }}
               />
