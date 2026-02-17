@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Loader2, Save } from 'lucide-react'
+import { Loader2, Save, Camera } from 'lucide-react'
 import { useWords } from '../hooks/useWords'
 import { translateEnToDe } from '../utils/translate'
 import { fetchPhonetic } from '../utils/phonetic'
 import { suggestWords } from '../utils/suggestWords'
+import { ScanWordModal } from './ScanWordModal'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Label } from './ui/Label'
@@ -23,6 +24,7 @@ export function AddWord() {
   const [offlineMessage, setOfflineMessage] = useState('')
   const [suggestions, setSuggestions] = useState([])
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  const [scanOpen, setScanOpen] = useState(false)
   const suggestRef = useRef(null)
 
   useEffect(() => {
@@ -121,8 +123,9 @@ export function AddWord() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2" ref={suggestRef}>
                 <Label htmlFor="word">English word</Label>
-                <div className="relative">
-                  <Input
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
                     id="word"
                     placeholder="Type a word"
                     value={word}
@@ -154,8 +157,19 @@ export function AddWord() {
                     </ul>
                   )}
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setScanOpen(true)}
+                  disabled={loading}
+                  className="shrink-0"
+                  title="Scan word from camera"
+                >
+                  <Camera className="h-5 w-5" />
+                </Button>
               </div>
-              {!confirming ? (
+            </div>
+            {!confirming ? (
                 <Button type="submit" disabled={loading} className="w-full">
                   {loading ? (
                     <>
@@ -217,6 +231,12 @@ export function AddWord() {
             )}
           </CardContent>
         </Card>
+
+        <ScanWordModal
+          open={scanOpen}
+          onClose={() => setScanOpen(false)}
+          onWordExtracted={(w) => setWord(w)}
+        />
       </div>
     </div>
   )
