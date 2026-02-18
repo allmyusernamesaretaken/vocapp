@@ -30,3 +30,9 @@ body {
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
+
+/* Scan word cropper */
+.cropper-scan {
+  height: 320px;
+  background: #1c1917;
+}

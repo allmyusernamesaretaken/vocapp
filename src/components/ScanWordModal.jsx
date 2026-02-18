@@ -1,7 +1,7 @@
-import { useState, useCallback, useRef } from 'react'
-import Cropper from 'react-easy-crop'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { Cropper } from 'react-advanced-cropper'
+import 'react-advanced-cropper/dist/style.css'
 import { Loader2, Camera } from 'lucide-react'
-import { getCroppedImageBlob } from '../utils/cropImage'
 import { Button } from './ui/Button'
 import {
   Dialog,
@@ -10,22 +10,21 @@ import {
   DialogTitle
 } from './ui/Dialog'
 
+const CROPPER_HEIGHT = 320
+const MAGNIFIER_SIZE = 100
+const MAGNIFIER_ZOOM = 2.5
+
 export function ScanWordModal({ open, onClose, onWordExtracted }) {
   const [step, setStep] = useState('pick')
   const [imageSrc, setImageSrc] = useState(null)
-  const [crop, setCrop] = useState({ x: 0, y: 0 })
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null)
+  const [zoom, setZoom] = useState(1)
+  const [magnifier, setMagnifier] = useState(null)
+  const [magnifierPreview, setMagnifierPreview] = useState(null)
   const [extracting, setExtracting] = useState(false)
   const [error, setError] = useState(null)
   const cameraInputRef = useRef(null)
-
-  const onCropComplete = useCallback((_croppedArea, croppedAreaPx) => {
-    setCroppedAreaPixels(croppedAreaPx)
-  }, [])
-
-  const onCropAreaChange = useCallback((_croppedArea, croppedAreaPx) => {
-    setCroppedAreaPixels(croppedAreaPx)
-  }, [])
+  const cropperRef = useRef(null)
+  const isResizingRef = useRef(false)
 
   const handleFileChange = (e) => {
     const file = e.target?.files?.[0]
@@ -34,21 +33,35 @@ export function ScanWordModal({ open, onClose, onWordExtracted }) {
     const url = URL.createObjectURL(file)
     setImageSrc(url)
     setStep('crop')
-    setCrop({ x: 0, y: 0 })
-    setCroppedAreaPixels(null)
+    setZoom(1)
+    setMagnifier(null)
+    setMagnifierPreview(null)
     e.target.value = ''
   }
 
+  const handleZoomChange = useCallback((value) => {
+    const num = Number(value)
+    setZoom(num)
+    if (cropperRef.current) {
+      cropperRef.current.zoomImage(num)
+    }
+  }, [])
+
   const handleExtract = async () => {
-    if (!imageSrc || !croppedAreaPixels) return
+    if (!cropperRef.current) return
     setExtracting(true)
     setError(null)
     try {
-      const blob = await getCroppedImageBlob(imageSrc, croppedAreaPixels)
-      const Tesseract = (await import('tesseract.js')).default
-      const { data: { text } } = await Tesseract.recognize(blob, 'eng', {
-        logger: () => {}
+      const canvas = cropperRef.current.getCanvas()
+      if (!canvas) {
+        setError('Could not get crop. Try again.')
+        return
+      }
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png')
       })
+      const Tesseract = (await import('tesseract.js')).default
+      const { data: { text } } = await Tesseract.recognize(blob, 'eng', { logger: () => {} })
       const cleaned = text
         .replace(/\s+/g, ' ')
         .trim()
@@ -71,11 +84,63 @@ export function ScanWordModal({ open, onClose, onWordExtracted }) {
     if (imageSrc) URL.revokeObjectURL(imageSrc)
     setStep('pick')
     setImageSrc(null)
-    setCroppedAreaPixels(null)
+    setMagnifier(null)
+    setMagnifierPreview(null)
     setError(null)
     setExtracting(false)
+    isResizingRef.current = false
     onClose()
   }
+
+  const updateMagnifierPreview = useCallback(() => {
+    if (cropperRef.current) {
+      try {
+        const canvas = cropperRef.current.getCanvas()
+        if (canvas) setMagnifierPreview(canvas.toDataURL('image/png'))
+      } catch (_) {}
+    }
+  }, [])
+
+  const onResize = useCallback(() => {
+    isResizingRef.current = true
+    updateMagnifierPreview()
+  }, [updateMagnifierPreview])
+
+  const onResizeEnd = useCallback(() => {
+    isResizingRef.current = false
+    setMagnifier(null)
+    setMagnifierPreview(null)
+  }, [])
+
+  const onCropperChange = useCallback((cropper) => {
+    if (cropper) cropperRef.current = cropper
+    if (isResizingRef.current) updateMagnifierPreview()
+  }, [updateMagnifierPreview])
+
+  useEffect(() => {
+    if (step !== 'crop' || !imageSrc) return
+    const onPointerMove = (e) => {
+      if (!isResizingRef.current) return
+      const x = e.clientX ?? (e.touches && e.touches[0]?.clientX)
+      const y = e.clientY ?? (e.touches && e.touches[0]?.clientY)
+      if (x != null && y != null) setMagnifier({ x, y })
+    }
+    const onPointerUp = () => {
+      if (isResizingRef.current) {
+        isResizingRef.current = false
+        setMagnifier(null)
+        setMagnifierPreview(null)
+      }
+    }
+    document.addEventListener('pointermove', onPointerMove, { passive: true })
+    document.addEventListener('pointerup', onPointerUp)
+    document.addEventListener('touchend', onPointerUp)
+    return () => {
+      document.removeEventListener('pointermove', onPointerMove)
+      document.removeEventListener('pointerup', onPointerUp)
+      document.removeEventListener('touchend', onPointerUp)
+    }
+  }, [step, imageSrc])
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
@@ -113,23 +178,61 @@ export function ScanWordModal({ open, onClose, onWordExtracted }) {
 
         {step === 'crop' && imageSrc && (
           <>
-            <div className="relative h-[280px] w-full bg-stone-900 touch-none" style={{ touchAction: 'pan-x pan-y' }}>
+            <div className="relative bg-stone-900" style={{ height: CROPPER_HEIGHT }}>
               <Cropper
-                image={imageSrc}
-                crop={crop}
-                zoom={1}
-                minZoom={1}
-                maxZoom={1}
-                zoomWithScroll={false}
-                aspect={undefined}
-                onCropChange={setCrop}
-                onCropComplete={onCropComplete}
-                onCropAreaChange={onCropAreaChange}
-                objectFit="contain"
-                style={{ containerStyle: { backgroundColor: '#1c1917' } }}
+                ref={cropperRef}
+                src={imageSrc}
+                className="cropper-scan"
+                imageRestriction="none"
+                stencilProps={{
+                  handlers: true,
+                  lines: true,
+                  movable: true,
+                  resizable: true
+                }}
+                defaultTransforms={{ scale: 1 }}
+                onResize={onResize}
+                onResizeEnd={onResizeEnd}
+                onChange={onCropperChange}
+                onReady={(cropper) => {
+                  if (cropper) cropperRef.current = cropper
+                }}
               />
+              {magnifier && magnifierPreview && (
+                <div
+                  className="pointer-events-none fixed z-[100] rounded-full border-4 border-stone-300 bg-stone-900 shadow-xl overflow-hidden"
+                  style={{
+                    width: MAGNIFIER_SIZE,
+                    height: MAGNIFIER_SIZE,
+                    left: Math.max(8, Math.min(window.innerWidth - MAGNIFIER_SIZE - 8, magnifier.x - MAGNIFIER_SIZE / 2)),
+                    top: Math.max(8, magnifier.y - MAGNIFIER_SIZE - 12)
+                  }}
+                >
+                  <img
+                    src={magnifierPreview}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    style={{
+                      transform: `scale(${MAGNIFIER_ZOOM})`,
+                      transformOrigin: 'center center'
+                    }}
+                  />
+                </div>
+              )}
             </div>
             <div className="border-t border-stone-200 px-5 py-4 dark:border-stone-700">
+              <label className="mb-2 block text-xs font-medium text-stone-600 dark:text-stone-400">
+                Zoom image (edges can hide)
+              </label>
+              <input
+                type="range"
+                min={1}
+                max={4}
+                step={0.1}
+                value={zoom}
+                onChange={(e) => handleZoomChange(e.target.value)}
+                className="mb-4 w-full accent-stone-700 dark:accent-stone-400"
+              />
               {error && (
                 <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
               )}
